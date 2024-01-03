@@ -107,7 +107,7 @@ class _SetupFuturePaymentScreenState extends State<SetupFuturePaymentScreen> {
     }
     try {
       // 1. Create setup intent on backend
-      final clientSecret = await _createSetupIntentOnBackend(_email);
+      final chargebackFormMap = await _createSetupIntentOnBackend(_email);
 
       // 2. Gather customer billing information (ex. email)
       final billingDetails = BillingDetails(
@@ -126,8 +126,10 @@ class _SetupFuturePaymentScreenState extends State<SetupFuturePaymentScreen> {
 
       // 3. Confirm setup intent
 
+      Stripe.publishableKey = chargebackFormMap['publishableApiKey'] as String;
+
       final setupIntentResult = await Stripe.instance.confirmSetupIntent(
-        paymentIntentClientSecret: clientSecret,
+        paymentIntentClientSecret: chargebackFormMap['clientSecret'] as String,
         params: PaymentMethodParams.card(
           paymentMethodData: PaymentMethodData(
             billingDetails: billingDetails,
@@ -207,22 +209,24 @@ class _SetupFuturePaymentScreenState extends State<SetupFuturePaymentScreen> {
         content: Text('Success!: The payment was confirmed successfully!')));
   }
 
-  Future<String> _createSetupIntentOnBackend(String email) async {
-    final url = Uri.parse('$kApiUrl/create-setup-intent');
-    final response = await http.post(
+  Future<Map<String, dynamic>> _createSetupIntentOnBackend(String email) async {
+    final url = Uri.parse('$kApiUrl/api/DE/registrations/chargeback-confirmation?kb_key=710a7f74-6053-4d18-8e5e-0b3ea93dbfd5');
+    final response = await http.get(
       url,
       headers: {
         'Content-Type': 'application/json',
-      },
-      body: json.encode({
-        'email': email,
-      }),
+        'Authorization': 'Basic dXNlcjpwYXNzd29yZA==' // encoded user:password
+      }
     );
     final Map<String, dynamic> bodyResponse = json.decode(response.body);
-    final clientSecret = bodyResponse['clientSecret'] as String;
+    print(bodyResponse);
+    final clientSecret = bodyResponse['data']['attributes']['clientSecret'] as String;
     log('Client token  $clientSecret');
 
-    return clientSecret;
+    return {
+      'clientSecret': clientSecret,
+      'publishableApiKey': bodyResponse['data']['attributes']['publishableApiKey'],
+    };
   }
 
   Future<Map<String, dynamic>> _chargeCardOffSession() async {
